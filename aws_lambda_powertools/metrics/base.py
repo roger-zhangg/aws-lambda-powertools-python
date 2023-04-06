@@ -1,65 +1,23 @@
-import datetime
 import functools
 import json
 import logging
-import numbers
 import os
 import warnings
 from collections import defaultdict
 from contextlib import contextmanager
-from enum import Enum
-from typing import Any, Callable, Dict, Generator, List, Optional, Union
+from typing import Any, Callable, Dict, Generator, Optional, Union
+
+from provider import EMFProvider, MetricsProvider
 
 from ..shared import constants
 from ..shared.functions import resolve_env_var_choice
-from .exceptions import (
-    MetricResolutionError,
-    MetricUnitError,
-    MetricValueError,
-    SchemaValidationError,
-)
-from .types import MetricNameUnitResolution
+from .exceptions import SchemaValidationError
+from .types import MetricResolution, MetricSummary, MetricUnit
 
 logger = logging.getLogger(__name__)
 
-MAX_METRICS = 100
-MAX_DIMENSIONS = 29
 
 is_cold_start = True
-
-
-class MetricResolution(Enum):
-    Standard = 60
-    High = 1
-
-
-class MetricUnit(Enum):
-    Seconds = "Seconds"
-    Microseconds = "Microseconds"
-    Milliseconds = "Milliseconds"
-    Bytes = "Bytes"
-    Kilobytes = "Kilobytes"
-    Megabytes = "Megabytes"
-    Gigabytes = "Gigabytes"
-    Terabytes = "Terabytes"
-    Bits = "Bits"
-    Kilobits = "Kilobits"
-    Megabits = "Megabits"
-    Gigabits = "Gigabits"
-    Terabits = "Terabits"
-    Percent = "Percent"
-    Count = "Count"
-    BytesPerSecond = "Bytes/Second"
-    KilobytesPerSecond = "Kilobytes/Second"
-    MegabytesPerSecond = "Megabytes/Second"
-    GigabytesPerSecond = "Gigabytes/Second"
-    TerabytesPerSecond = "Terabytes/Second"
-    BitsPerSecond = "Bits/Second"
-    KilobitsPerSecond = "Kilobits/Second"
-    MegabitsPerSecond = "Megabits/Second"
-    GigabitsPerSecond = "Gigabits/Second"
-    TerabitsPerSecond = "Terabits/Second"
-    CountPerSecond = "Count/Second"
 
 
 class MetricManager:
@@ -99,16 +57,18 @@ class MetricManager:
         namespace: Optional[str] = None,
         metadata_set: Optional[Dict[str, Any]] = None,
         service: Optional[str] = None,
+        provider: MetricsProvider = None,
     ):
         self.metric_set = metric_set if metric_set is not None else {}
         self.dimension_set = dimension_set if dimension_set is not None else {}
         self.namespace = resolve_env_var_choice(choice=namespace, env=os.getenv(constants.METRICS_NAMESPACE_ENV))
         self.service = resolve_env_var_choice(choice=service, env=os.getenv(constants.SERVICE_NAME_ENV))
         self.metadata_set = metadata_set if metadata_set is not None else {}
+        self.provider = provider if metadata_set is not None else EMFProvider()
         self._metric_units = [unit.value for unit in MetricUnit]
         self._metric_unit_valid_options = list(MetricUnit.__members__)
-        self._metric_resolutions = [resolution.value for resolution in MetricResolution]
 
+    # TODO refactor with provider
     def add_metric(
         self,
         name: str,
@@ -150,30 +110,32 @@ class MetricManager:
         MetricResolutionError
             When metric resolution is not supported by CloudWatch
         """
-        if not isinstance(value, numbers.Number):
-            raise MetricValueError(f"{value} is not a valid number")
 
-        unit = self._extract_metric_unit_value(unit=unit)
-        resolution = self._extract_metric_resolution_value(resolution=resolution)
+        # Change to provider
         metric: Dict = self.metric_set.get(name, defaultdict(list))
-        metric["Unit"] = unit
-        metric["StorageResolution"] = resolution
-        metric["Value"].append(float(value))
+        metric = self.provider.add_metric(metric, name, unit, value, resolution)
         logger.debug(f"Adding metric: {name} with {metric}")
         self.metric_set[name] = metric
 
-        if len(self.metric_set) == MAX_METRICS or len(metric["Value"]) == MAX_METRICS:
-            logger.debug(f"Exceeded maximum of {MAX_METRICS} metrics - Publishing existing metric set")
-            metrics = self.serialize_metric_set()
-            print(json.dumps(metrics))
+        if len(self.metric_set) == self.provider.MAX_METRICS or len(metric["Value"]) == self.provider.MAX_METRICS:
+            logger.debug(f"Exceeded maximum of {self.provider.MAX_METRICS} metrics - Publishing existing metric set")
+            metric_summary: MetricSummary = {
+                "Namespace": self.namespace,
+                "Metrics": self.metric_set,
+                "Dimensions": self.dimension_set,
+                "Metadata": self.metadata_set,
+            }
+            metrics = self.provider.serialize(metric_summary)
+            self.provider.flush(metrics)
 
             # clear metric set only as opposed to metrics and dimensions set
             # since we could have more than 100 metrics
             self.metric_set.clear()
 
+    # TODO refactor with provider
     def serialize_metric_set(
         self, metrics: Optional[Dict] = None, dimensions: Optional[Dict] = None, metadata: Optional[Dict] = None
-    ) -> Dict:
+    ):
         """Serializes metric and dimensions set
 
         Parameters
@@ -216,54 +178,17 @@ class MetricManager:
             # self.service won't be a float
             self.add_dimension(name="service", value=self.service)
 
-        if len(metrics) == 0:
-            raise SchemaValidationError("Must contain at least one metric.")
-
-        if self.namespace is None:
-            raise SchemaValidationError("Must contain a metric namespace.")
-
-        logger.debug({"details": "Serializing metrics", "metrics": metrics, "dimensions": dimensions})
-
-        # For standard resolution metrics, don't add StorageResolution field to avoid unnecessary ingestion of data into cloudwatch # noqa E501
-        # Example: [ { "Name": "metric_name", "Unit": "Count"} ] # noqa E800
-        #
-        # In case using high-resolution metrics, add StorageResolution field
-        # Example: [ { "Name": "metric_name", "Unit": "Count", "StorageResolution": 1 } ] # noqa E800
-        metric_definition: List[MetricNameUnitResolution] = []
-        metric_names_and_values: Dict[str, float] = {}  # { "metric_name": 1.0 }
-
-        for metric_name in metrics:
-            metric: dict = metrics[metric_name]
-            metric_value: int = metric.get("Value", 0)
-            metric_unit: str = metric.get("Unit", "")
-            metric_resolution: int = metric.get("StorageResolution", 60)
-
-            metric_definition_data: MetricNameUnitResolution = {"Name": metric_name, "Unit": metric_unit}
-
-            # high-resolution metrics
-            if metric_resolution == 1:
-                metric_definition_data["StorageResolution"] = metric_resolution
-
-            metric_definition.append(metric_definition_data)
-
-            metric_names_and_values.update({metric_name: metric_value})
-
-        return {
-            "_aws": {
-                "Timestamp": int(datetime.datetime.now().timestamp() * 1000),  # epoch
-                "CloudWatchMetrics": [
-                    {
-                        "Namespace": self.namespace,  # "test_namespace"
-                        "Dimensions": [list(dimensions.keys())],  # [ "service" ]
-                        "Metrics": metric_definition,
-                    }
-                ],
-            },
-            **dimensions,  # "service": "test_service"
-            **metadata,  # "username": "test"
-            **metric_names_and_values,  # "single_metric": 1.0
+        metric_summary: MetricSummary = {
+            "Namespace": self.namespace,
+            "Metrics": metrics,
+            "Dimensions": dimensions,
+            "Metadata": metadata,
         }
+        metrics = self.provider.serialize(metric_summary)
 
+        return metrics
+
+    # TODO keep for compatibility
     def add_dimension(self, name: str, value: str) -> None:
         """Adds given dimension to all metrics
 
@@ -280,16 +205,19 @@ class MetricManager:
         value : str
             Dimension value
         """
-        logger.debug(f"Adding dimension: {name}:{value}")
-        if len(self.dimension_set) == MAX_DIMENSIONS:
-            raise SchemaValidationError(
-                f"Maximum number of dimensions exceeded ({MAX_DIMENSIONS}): Unable to add dimension {name}."
-            )
-        # Cast value to str according to EMF spec
-        # Majority of values are expected to be string already, so
-        # checking before casting improves performance in most cases
-        self.dimension_set[name] = value if isinstance(value, str) else str(value)
 
+        logger.debug(f"Adding dimension: {name}:{value}")
+        if len(self.dimension_set) == self.provider.MAX_DIMENSIONS:
+            raise SchemaValidationError(
+                f"Maximum number of dimensions exceeded"
+                f" ({self.provider.MAX_DIMENSIONS}): Unable to add dimension {name}."
+            )
+
+        name, value = self.provider.add_dimension(name, value)
+
+        self.dimension_set[name] = value
+
+    # TODO refactor with provider
     def add_metadata(self, key: str, value: Any) -> None:
         """Adds high cardinal metadata for metrics object
 
@@ -312,15 +240,10 @@ class MetricManager:
         value : any
             Metadata value
         """
-        logger.debug(f"Adding metadata: {key}:{value}")
 
-        # Cast key to str according to EMF spec
-        # Majority of keys are expected to be string already, so
-        # checking before casting improves performance in most cases
-        if isinstance(key, str):
-            self.metadata_set[key] = value
-        else:
-            self.metadata_set[str(key)] = value
+        key, value = self.provider.add_metadata(key, value)
+        logger.debug(f"Adding metadata: {key}:{value}")
+        self.metadata_set[key] = value
 
     def clear_metrics(self) -> None:
         logger.debug("Clearing out existing metric set from memory")
@@ -397,74 +320,19 @@ class MetricManager:
                         stacklevel=2,
                     )
                 else:
-                    metrics = self.serialize_metric_set()
+                    metric_summary: MetricSummary = {
+                        "Namespace": self.namespace,
+                        "Metrics": self.metric_set,
+                        "Dimensions": self.dimension_set,
+                        "Metadata": self.metadata_set,
+                    }
+                    metrics = self.provider.serialize(metric_summary)
                     self.clear_metrics()
-                    print(json.dumps(metrics, separators=(",", ":")))
+                    self.provider.flush(metrics)
 
             return response
 
         return decorate
-
-    def _extract_metric_resolution_value(self, resolution: Union[int, MetricResolution]) -> int:
-        """Return metric value from metric unit whether that's str or MetricResolution enum
-
-        Parameters
-        ----------
-        unit : Union[int, MetricResolution]
-            Metric resolution
-
-        Returns
-        -------
-        int
-            Metric resolution value must be 1 or 60
-
-        Raises
-        ------
-        MetricResolutionError
-            When metric resolution is not supported by CloudWatch
-        """
-        if isinstance(resolution, MetricResolution):
-            return resolution.value
-
-        if isinstance(resolution, int) and resolution in self._metric_resolutions:
-            return resolution
-
-        raise MetricResolutionError(
-            f"Invalid metric resolution '{resolution}', expected either option: {self._metric_resolutions}"  # noqa: E501
-        )
-
-    def _extract_metric_unit_value(self, unit: Union[str, MetricUnit]) -> str:
-        """Return metric value from metric unit whether that's str or MetricUnit enum
-
-        Parameters
-        ----------
-        unit : Union[str, MetricUnit]
-            Metric unit
-
-        Returns
-        -------
-        str
-            Metric unit value (e.g. "Seconds", "Count/Second")
-
-        Raises
-        ------
-        MetricUnitError
-            When metric unit is not supported by CloudWatch
-        """
-
-        if isinstance(unit, str):
-            if unit in self._metric_unit_valid_options:
-                unit = MetricUnit[unit].value
-
-            if unit not in self._metric_units:
-                raise MetricUnitError(
-                    f"Invalid metric unit '{unit}', expected either option: {self._metric_unit_valid_options}"
-                )
-
-        if isinstance(unit, MetricUnit):
-            unit = unit.value
-
-        return unit
 
     def _add_cold_start_metric(self, context: Any) -> None:
         """Add cold start metric and function_name dimension
@@ -475,13 +343,39 @@ class MetricManager:
             Lambda context
         """
         global is_cold_start
-        if is_cold_start:
-            logger.debug("Adding cold start metric and function_name dimension")
-            with single_metric(name="ColdStart", unit=MetricUnit.Count, value=1, namespace=self.namespace) as metric:
-                metric.add_dimension(name="function_name", value=context.function_name)
+        if not is_cold_start:
+            return
+
+        logger.debug("Adding cold start metric and function_name dimension")
+        # TODO try to simplify single metrics
+        if self.provider.Enable_Single_Metrics:
+            metric_set: Optional[Dict] = None
+            dimension_set: Optional[Dict] = None
+            metric_result: Any = None
+            name = "ColdStart"
+            try:
+                metrics = self.provider.add_metric(metrics={}, name=name, unit=MetricUnit.Count, value=1, resolution=60)
+                metric_set[name] = metrics
+
+                dim_name, dim_value = self.provider.add_dimension(name="function_name", value=context.function_name)
+                dimension_set[dim_name] = dim_value
                 if self.service:
-                    metric.add_dimension(name="service", value=str(self.service))
-                is_cold_start = False
+                    dim_name, dim_value = self.provider.add_dimension(name="service", value=self.service)
+                    dimension_set[dim_name] = dim_value
+
+                metric_summary: MetricSummary = {
+                    "Namespace": self.namespace,
+                    "Metrics": metric_set,
+                    "Dimensions": dimension_set,
+                }
+                metric_result = self.provider.serialize(metric_summary)
+            finally:
+                self.provider.flush(metric_result)
+        # provider can choose not to treat coldstart as a single metrics
+        else:
+            self.add_metric(name="ColdStart", unit=MetricUnit.Count, value=1, resolution=60)
+
+        is_cold_start = False
 
 
 class SingleMetric(MetricManager):

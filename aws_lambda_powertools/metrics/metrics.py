@@ -69,19 +69,20 @@ class Metrics(MetricManager):
     _metadata: Dict[str, Any] = {}
     _default_dimensions: Dict[str, Any] = {}
 
-    def __init__(self, service: Optional[str] = None, namespace: Optional[str] = None):
+    def __init__(self, service: Optional[str] = None, namespace: Optional[str] = None, provider=None):
         self.metric_set = self._metrics
         self.metadata_set = self._metadata
         self.default_dimensions = self._default_dimensions
         self.dimension_set = self._dimensions
-
         self.dimension_set.update(**self._default_dimensions)
+        self.provider = provider
         return super().__init__(
             namespace=namespace,
             service=service,
             metric_set=self.metric_set,
             dimension_set=self.dimension_set,
             metadata_set=self.metadata_set,
+            provider=self.provider,
         )
 
     def set_default_dimensions(self, **dimensions) -> None:
@@ -128,5 +129,5 @@ class EphemeralMetrics(MetricManager):
     - Create the same metrics with different dimensions more than once
     """
 
-    def __init__(self, service: Optional[str] = None, namespace: Optional[str] = None):
-        super().__init__(namespace=namespace, service=service)
+    def __init__(self, service: Optional[str] = None, namespace: Optional[str] = None, provider=None):
+        super().__init__(namespace=namespace, service=service, provider=provider)

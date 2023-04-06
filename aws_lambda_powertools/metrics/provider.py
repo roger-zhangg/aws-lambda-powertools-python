@@ -42,6 +42,8 @@ class MetricsProvider:
 
 class EMFProvider(MetricsProvider):
     def __init__(self):
+        self._metric_unit_valid_options = list(MetricUnit.__members__)
+        self._metric_units = [unit.value for unit in MetricUnit]
         return super().__init__()
 
     # generic add metrics function

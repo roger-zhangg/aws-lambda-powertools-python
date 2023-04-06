@@ -9,6 +9,7 @@ from .exceptions import (
 )
 from .metric import single_metric
 from .metrics import EphemeralMetrics, Metrics
+from .provider import EMFProvider, MetricsProvider
 
 __all__ = [
     "Metrics",
@@ -20,4 +21,6 @@ __all__ = [
     "MetricResolutionError",
     "SchemaValidationError",
     "MetricValueError",
+    "EMFProvider",
+    "MetricsProvider",
 ]

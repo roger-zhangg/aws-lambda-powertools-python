@@ -7,11 +7,10 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Generator, Optional, Union
 
-from provider import EMFProvider, MetricsProvider
-
 from ..shared import constants
 from ..shared.functions import resolve_env_var_choice
 from .exceptions import SchemaValidationError
+from .provider import EMFProvider, MetricsProvider
 from .types import MetricResolution, MetricSummary, MetricUnit
 
 logger = logging.getLogger(__name__)
@@ -65,8 +64,6 @@ class MetricManager:
         self.service = resolve_env_var_choice(choice=service, env=os.getenv(constants.SERVICE_NAME_ENV))
         self.metadata_set = metadata_set if metadata_set is not None else {}
         self.provider = provider if metadata_set is not None else EMFProvider()
-        self._metric_units = [unit.value for unit in MetricUnit]
-        self._metric_unit_valid_options = list(MetricUnit.__members__)
 
     # TODO refactor with provider
     def add_metric(

@@ -63,7 +63,7 @@ class MetricManager:
         self.namespace = resolve_env_var_choice(choice=namespace, env=os.getenv(constants.METRICS_NAMESPACE_ENV))
         self.service = resolve_env_var_choice(choice=service, env=os.getenv(constants.SERVICE_NAME_ENV))
         self.metadata_set = metadata_set if metadata_set is not None else {}
-        self.provider = provider if metadata_set is not None else EMFProvider()
+        self.provider = provider if provider is not None else EMFProvider()
 
     # TODO refactor with provider
     def add_metric(

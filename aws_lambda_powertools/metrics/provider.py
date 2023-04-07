@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 import numbers
+from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Union
 
 from .exceptions import (
@@ -16,26 +17,30 @@ logger = logging.getLogger(__name__)
 
 
 # the template of metrics providers
-class MetricsProvider:
-    def __init__(self):
-        self.MAX_METRICS = 100
-        self.MAX_DIMENSIONS = 29
-        # use single metric when recording coldstart
-        self.Enable_Single_Metrics = True
-        pass
+class MetricsProvider(ABC):
+    MAX_METRICS = 100
+    MAX_DIMENSIONS = 29
+    # use single metric when recording coldstart
+    Enable_Single_Metrics = True
+    # enable run validation before sending out metrics
+    Validate_Metrics = False
 
+    @abstractmethod
     def add_metric(self, metrics, name, unit, value, resolution):
         pass
 
     # validate the format of metrics
+    @abstractmethod
     def validate(self, metrics: MetricSummary) -> bool:
         pass
 
     # serialize for flushing
+    @abstractmethod
     def serialize(self, metrics: MetricSummary):
         pass
 
     # flush serialized data to output
+    @abstractmethod
     def flush(self, metrics):
         pass
 
@@ -61,6 +66,9 @@ class EMFProvider(MetricsProvider):
 
     # validate the format of metrics
     def validate(self, metrics: MetricSummary) -> bool:
+        if not self.Validate_Metrics:
+            return True
+
         if len(metrics["Metrics"]) == 0:
             raise SchemaValidationError("Must contain at least one metric.")
 

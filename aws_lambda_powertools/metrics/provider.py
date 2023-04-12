@@ -18,15 +18,28 @@ logger = logging.getLogger(__name__)
 
 # the template of metrics providers
 class MetricsProvider(ABC):
+    # MAX_METRICS controls how many metrics can be collected before auto-flushing
     MAX_METRICS = 100
+    # MAX_DIMENSIONS controls how many dimension could be added
     MAX_DIMENSIONS = 29
     # use single metric when recording coldstart
     Enable_Single_Metrics = True
-    # enable run validation before sending out metrics
+    # enable validation before sending out metrics. When enabled, validation will raise error if failed.
     Validate_Metrics = False
 
+    # General add metric function. Should return combined metrics Dict
     @abstractmethod
-    def add_metric(self, metrics, name, unit, value, resolution):
+    def add_metric(self, metrics, name, unit, value, resolution) -> Dict:
+        pass
+
+    # add logic for dimension name/value conversion and return (name,value)
+    @abstractmethod
+    def add_dimension(self, name: str, value: str) -> (str, str):
+        pass
+
+    # add logic for metadata conversion and return (key,value)
+    @abstractmethod
+    def add_metadata(self, key: str, value: Any) -> (str, Any):
         pass
 
     # validate the format of metrics
@@ -34,12 +47,12 @@ class MetricsProvider(ABC):
     def validate(self, metrics: MetricSummary) -> bool:
         pass
 
-    # serialize for flushing
+    # serialize and return dict for flushing
     @abstractmethod
-    def serialize(self, metrics: MetricSummary):
+    def serialize(self, metrics: MetricSummary) -> Dict:
         pass
 
-    # flush serialized data to output
+    # flush serialized data to output, or send to API directly
     @abstractmethod
     def flush(self, metrics):
         pass
@@ -52,7 +65,7 @@ class EMFProvider(MetricsProvider):
         return super().__init__()
 
     # generic add metrics function
-    def add_metric(self, metrics, name, unit, value, resolution):
+    def add_metric(self, metrics, name, unit, value, resolution) -> Dict:
         if not isinstance(value, numbers.Number):
             raise MetricValueError(f"{value} is not a valid number")
 
@@ -78,9 +91,9 @@ class EMFProvider(MetricsProvider):
         return True
 
     # serialize for flushing
-    def serialize(self, metrics: MetricSummary):
+    def serialize(self, metrics: MetricSummary) -> Dict:
         if not self.validate(metrics):
-            raise SchemaValidationError(f"{metrics} is not a valid metric")
+            raise SchemaValidationError(f"{metrics} is not a valid  metric")
         logger.debug(
             {"details": "Serializing metrics", "metrics": metrics["Metrics"], "dimensions": metrics["Dimensions"]}
         )
@@ -106,7 +119,6 @@ class EMFProvider(MetricsProvider):
                 metric_definition_data["StorageResolution"] = metric_resolution
 
             metric_definition.append(metric_definition_data)
-
             metric_names_and_values.update({metric_name: metric_value})
 
         return {
@@ -114,14 +126,14 @@ class EMFProvider(MetricsProvider):
                 "Timestamp": int(datetime.datetime.now().timestamp() * 1000),  # epoch
                 "CloudWatchMetrics": [
                     {
-                        "Namespace": metrics["Namespace"],  # "test_namespace"
-                        "Dimensions": [list(metrics["Dimensions"].keys())],  # [ "service" ]
+                        "Namespace": metrics.get("Namespace", ""),  # "test_namespace"
+                        "Dimensions": [list(metrics.get("Dimensions", {}).keys())],  # [ "service" ]
                         "Metrics": metric_definition,
                     }
                 ],
             },
-            **metrics["Dimensions"],  # "service": "test_service"
-            **metrics["Metadata"],  # "username": "test"
+            **metrics.get("Dimensions", {}),  # "service": "test_service"
+            **metrics.get("Metadata", {}),  # "username": "test"
             **metric_names_and_values,  # "single_metric": 1.0
         }
 
@@ -129,13 +141,13 @@ class EMFProvider(MetricsProvider):
     def flush(self, metrics):
         print(json.dumps(metrics, separators=(",", ":")))
 
-    def add_dimension(self, name: str, value: str):
+    def add_dimension(self, name: str, value: str) -> (str, str):
         # Cast value to str according to EMF spec
         # Majority of values are expected to be string already, so
         # checking before casting improves performance in most cases
         return name, value if isinstance(value, str) else str(value)
 
-    def add_metadata(self, key: str, value: Any):
+    def add_metadata(self, key: str, value: Any) -> (str, Any):
         # Cast key to str according to EMF spec
         # Majority of keys are expected to be string already, so
         # checking before casting improves performance in most cases

@@ -346,12 +346,15 @@ class MetricManager:
         logger.debug("Adding cold start metric and function_name dimension")
         # TODO try to simplify single metrics
         if self.provider.Enable_Single_Metrics:
-            metric_set: Optional[Dict] = None
-            dimension_set: Optional[Dict] = None
+            metric_set: Optional[Dict] = {}
+            dimension_set: Optional[Dict] = {}
             metric_result: Any = None
             name = "ColdStart"
             try:
-                metrics = self.provider.add_metric(metrics={}, name=name, unit=MetricUnit.Count, value=1, resolution=60)
+                metric: Dict = self.metric_set.get(name, defaultdict(list))
+                metrics = self.provider.add_metric(
+                    metrics=metric, name=name, unit=MetricUnit.Count, value=1, resolution=60
+                )
                 metric_set[name] = metrics
 
                 dim_name, dim_value = self.provider.add_dimension(name="function_name", value=context.function_name)

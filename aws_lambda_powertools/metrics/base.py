@@ -22,13 +22,13 @@ is_cold_start = True
 class MetricManager:
     """Base class for metric functionality (namespace, metric, dimension, serialization)
 
-    MetricManager creates metrics asynchronously thanks to CloudWatch Embedded Metric Format (EMF).
-    CloudWatch EMF can create up to 100 metrics per EMF object
-    and metrics, dimensions, and namespace created via MetricManager
-    will adhere to the schema, will be serialized and validated against EMF Schema.
+    provider refactor: MetricManager implements general Metrics logic, AWS EMF logic are moved to provider.EMFProvider
+
+    MetricManager is now refactored to use provider. Default provider is AWS EMF provider
+    Bring/Implement your own metrics provider to support metrics format other than EMF
 
     **Use `aws_lambda_powertools.metrics.metrics.Metrics` or
-    `aws_lambda_powertools.metrics.metric.single_metric` to create EMF metrics.**
+    `aws_lambda_powertools.metrics.metric.single_metric` to create metrics.**
 
     Environment variables
     ---------------------
@@ -65,7 +65,6 @@ class MetricManager:
         self.metadata_set = metadata_set if metadata_set is not None else {}
         self.provider = provider if provider is not None else EMFProvider()
 
-    # TODO refactor with provider
     def add_metric(
         self,
         name: str,
@@ -116,24 +115,20 @@ class MetricManager:
 
         if len(self.metric_set) == self.provider.MAX_METRICS or len(metric["Value"]) == self.provider.MAX_METRICS:
             logger.debug(f"Exceeded maximum of {self.provider.MAX_METRICS} metrics - Publishing existing metric set")
-            metric_summary: MetricSummary = {
-                "Namespace": self.namespace,
-                "Metrics": self.metric_set,
-                "Dimensions": self.dimension_set,
-                "Metadata": self.metadata_set,
-            }
-            metrics = self.provider.serialize(metric_summary)
+
+            metrics = self.serialize_metric_set()
             self.provider.flush(metrics)
 
             # clear metric set only as opposed to metrics and dimensions set
             # since we could have more than 100 metrics
             self.metric_set.clear()
 
-    # TODO refactor with provider
     def serialize_metric_set(
         self, metrics: Optional[Dict] = None, dimensions: Optional[Dict] = None, metadata: Optional[Dict] = None
     ):
         """Serializes metric and dimensions set
+
+        provider refactor: pass in metrics, dimension, metadata, namespace into provider.serialize, return it's output
 
         Parameters
         ----------
@@ -165,15 +160,15 @@ class MetricManager:
         if metrics is None:  # pragma: no cover
             metrics = self.metric_set
 
-        if dimensions is None:  # pragma: no cover
-            dimensions = self.dimension_set
-
         if metadata is None:  # pragma: no cover
             metadata = self.metadata_set
 
         if self.service and not self.dimension_set.get("service"):
             # self.service won't be a float
             self.add_dimension(name="service", value=self.service)
+
+        if dimensions is None:  # pragma: no cover
+            dimensions = self.dimension_set
 
         metric_summary: MetricSummary = {
             "Namespace": self.namespace,
@@ -185,9 +180,10 @@ class MetricManager:
 
         return metrics
 
-    # TODO keep for compatibility
     def add_dimension(self, name: str, value: str) -> None:
         """Adds given dimension to all metrics
+
+        provider refactor: pass in name:value into provider and record provider output's name:value
 
         Example
         -------
@@ -214,7 +210,6 @@ class MetricManager:
 
         self.dimension_set[name] = value
 
-    # TODO refactor with provider
     def add_metadata(self, key: str, value: Any) -> None:
         """Adds high cardinal metadata for metrics object
 
@@ -223,6 +218,8 @@ class MetricManager:
 
         If you're looking to add metadata to filter metrics, then
         use add_dimensions method.
+
+        provider refactor: pass in key:value into provider and record provider output's key:value
 
         Example
         -------
@@ -247,6 +244,8 @@ class MetricManager:
         self.metric_set.clear()
         self.dimension_set.clear()
         self.metadata_set.clear()
+        # provider refactor: clear provider as well if they have internal variables
+        self.provider.clear_metrics()
 
     def log_metrics(
         self,
@@ -317,13 +316,7 @@ class MetricManager:
                         stacklevel=2,
                     )
                 else:
-                    metric_summary: MetricSummary = {
-                        "Namespace": self.namespace,
-                        "Metrics": self.metric_set,
-                        "Dimensions": self.dimension_set,
-                        "Metadata": self.metadata_set,
-                    }
-                    metrics = self.provider.serialize(metric_summary)
+                    metrics = self.serialize_metric_set()
                     self.clear_metrics()
                     self.provider.flush(metrics)
 
@@ -344,7 +337,7 @@ class MetricManager:
             return
 
         logger.debug("Adding cold start metric and function_name dimension")
-        # TODO try to simplify single metrics
+        # Provider.Enable_Single_Metrics decides output cold_start metrics as a single metric or not.
         if self.provider.Enable_Single_Metrics:
             metric_set: Optional[Dict] = {}
             dimension_set: Optional[Dict] = {}
@@ -371,13 +364,14 @@ class MetricManager:
                 metric_result = self.provider.serialize(metric_summary)
             finally:
                 self.provider.flush(metric_result)
-        # provider can choose not to treat coldstart as a single metrics
+        # self.provider.Enable_Single_Metrics = False, append coldstart as a normal metric
         else:
             self.add_metric(name="ColdStart", unit=MetricUnit.Count, value=1, resolution=60)
 
         is_cold_start = False
 
 
+# provider refactor: _add_cold_start_metric refactored, singleMetrics is no longer required, keeps for compatibility
 class SingleMetric(MetricManager):
     """SingleMetric creates an EMF object with a single metric.
 

@@ -57,8 +57,25 @@ class MetricsProvider(ABC):
     def flush(self, metrics):
         pass
 
+    # clear_metric in provider when clear_metrics is called in metrics class
+    @abstractmethod
+    def clear_metrics(self):
+        pass
+
 
 class EMFProvider(MetricsProvider):
+    """Class for CloudWatch EMF format provider.
+
+    Creates metrics asynchronously thanks to CloudWatch Embedded Metric Format (EMF).
+    CloudWatch EMF can create up to 100 metrics per EMF object
+    and metrics, dimensions, and namespace created via EMFProvider
+    will adhere to the schema, will be serialized and validated against EMF Schema.
+
+    All provider are used in MetricManager
+
+
+    """
+
     def __init__(self):
         self._metric_unit_valid_options = list(MetricUnit.__members__)
         self._metric_units = [unit.value for unit in MetricUnit]
@@ -82,11 +99,11 @@ class EMFProvider(MetricsProvider):
         if not self.Validate_Metrics:
             return True
 
-        if len(metrics["Metrics"]) == 0:
-            raise SchemaValidationError("Must contain at least one metric.")
-
         if metrics["Namespace"] is None:
             raise SchemaValidationError("Must contain a metric namespace.")
+
+        if len(metrics["Metrics"]) == 0:
+            raise SchemaValidationError("Must contain at least one metric.")
 
         return True
 
@@ -152,6 +169,10 @@ class EMFProvider(MetricsProvider):
         # Majority of keys are expected to be string already, so
         # checking before casting improves performance in most cases
         return key if isinstance(key, str) else str(key), value
+
+    # EMF provider doesn't have internal storage, just pass
+    def clear_metrics(self):
+        return
 
     def _extract_metric_resolution_value(self, resolution: Union[int, MetricResolution]) -> int:
         """Return metric value from metric unit whether that's str or MetricResolution enum

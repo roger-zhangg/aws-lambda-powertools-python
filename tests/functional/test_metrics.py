@@ -16,8 +16,8 @@ from aws_lambda_powertools.metrics import (
     SchemaValidationError,
 )
 from aws_lambda_powertools.metrics.base import (
-    MAX_DIMENSIONS,
     MetricManager,
+    MetricsProvider,
     reset_cold_start_flag,
 )
 
@@ -421,6 +421,7 @@ def test_schema_validation_no_namespace(metric, dimension):
     with pytest.raises(SchemaValidationError, match="Must contain a metric namespace."):
         with single_metric(**metric) as my_metric:
             my_metric.add_dimension(**dimension)
+            my_metric.provider.Validate_Metrics = True
 
 
 def test_schema_validation_incorrect_metric_value(metric, dimension, namespace):
@@ -437,7 +438,7 @@ def test_schema_validation_incorrect_metric_value(metric, dimension, namespace):
 def test_schema_no_metrics(service, namespace):
     # GIVEN Metrics is initialized
     my_metrics = Metrics(service=service, namespace=namespace)
-
+    my_metrics.provider.Validate_Metrics = True
     # THEN it should fail validation and raise SchemaValidationError
     with pytest.raises(SchemaValidationError, match="Must contain at least one metric."):
         my_metrics.serialize_metric_set()
@@ -445,7 +446,7 @@ def test_schema_no_metrics(service, namespace):
 
 def test_exceed_number_of_dimensions(metric, namespace):
     # GIVEN we have more dimensions than CloudWatch supports (N+1)
-    dimensions = [{"name": f"test_{i}", "value": "test"} for i in range(MAX_DIMENSIONS + 1)]
+    dimensions = [{"name": f"test_{i}", "value": "test"} for i in range(MetricsProvider.MAX_DIMENSIONS + 1)]
 
     # WHEN we attempt to serialize them into a valid EMF object
     # THEN it should fail validation and raise SchemaValidationError
@@ -458,7 +459,7 @@ def test_exceed_number_of_dimensions(metric, namespace):
 def test_exceed_number_of_dimensions_with_service(metric, namespace, monkeypatch):
     # GIVEN we have service set and add more dimensions than CloudWatch supports (N-1)
     monkeypatch.setenv("POWERTOOLS_SERVICE_NAME", "test_service")
-    dimensions = [{"name": f"test_{i}", "value": "test"} for i in range(MAX_DIMENSIONS)]
+    dimensions = [{"name": f"test_{i}", "value": "test"} for i in range(MetricsProvider.MAX_DIMENSIONS)]
 
     # WHEN we attempt to serialize them into a valid EMF object
     # THEN it should fail validation and raise SchemaValidationError
@@ -494,6 +495,7 @@ def test_log_metrics_during_exception(capsys, metric, dimension, namespace):
 def test_log_metrics_raise_on_empty_metrics(capsys, metric, dimension, namespace):
     # GIVEN Metrics is initialized
     my_metrics = Metrics(service="test_service", namespace=namespace)
+    my_metrics.provider.Validate_Metrics = True
 
     # WHEN log_metrics is used with raise_on_empty_metrics param and has no metrics
     @my_metrics.log_metrics(raise_on_empty_metrics=True)

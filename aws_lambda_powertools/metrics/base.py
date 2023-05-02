@@ -56,7 +56,7 @@ class MetricManager:
         namespace: Optional[str] = None,
         metadata_set: Optional[Dict[str, Any]] = None,
         service: Optional[str] = None,
-        provider: MetricsProvider = None,
+        provider: Optional[MetricsProvider] = None,
     ):
         self.metric_set = metric_set if metric_set is not None else {}
         self.dimension_set = dimension_set if dimension_set is not None else {}
@@ -125,7 +125,7 @@ class MetricManager:
 
     def serialize_metric_set(
         self, metrics: Optional[Dict] = None, dimensions: Optional[Dict] = None, metadata: Optional[Dict] = None
-    ):
+    ) -> Dict:
         """Serializes metric and dimensions set
 
         provider refactor: pass in metrics, dimension, metadata, namespace into provider.serialize, return it's output
@@ -359,8 +359,8 @@ class MetricManager:
         logger.debug("Adding cold start metric and function_name dimension")
         # Provider.Enable_Single_Metrics decides output cold_start metrics as a single metric or not.
         if self.provider.Enable_Single_Metrics:
-            metric_set: Optional[Dict] = {}
-            dimension_set: Optional[Dict] = {}
+            metric_set = {}
+            dimension_set = {}
             metric_result: Any = None
             name = "ColdStart"
             try:
@@ -380,6 +380,7 @@ class MetricManager:
                     "Namespace": self.namespace,
                     "Metrics": metric_set,
                     "Dimensions": dimension_set,
+                    "Metadata": {},
                 }
                 metric_result = self.provider.serialize(metric_summary)
             finally:

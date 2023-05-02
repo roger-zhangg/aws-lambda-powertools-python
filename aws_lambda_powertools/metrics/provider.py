@@ -3,7 +3,7 @@ import json
 import logging
 import numbers
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from .exceptions import (
     MetricResolutionError,
@@ -34,12 +34,12 @@ class MetricsProvider(ABC):
 
     # add logic for dimension name/value conversion and return (name,value)
     @abstractmethod
-    def add_dimension(self, name: str, value: str) -> (str, str):
+    def add_dimension(self, name: str, value: str) -> Tuple[str, str]:
         pass
 
     # add logic for metadata conversion and return (key,value)
     @abstractmethod
-    def add_metadata(self, key: str, value: Any) -> (str, Any):
+    def add_metadata(self, key: str, value: Any) -> Tuple[str, Any]:
         pass
 
     # validate the format of metrics
@@ -83,7 +83,7 @@ class EMFProvider(MetricsProvider):
 
     # generic add metrics function
     def add_metric(self, metrics, name, unit, value, resolution) -> Dict:
-        if not isinstance(value, numbers.Number):
+        if not isinstance(value, numbers.Real):
             raise MetricValueError(f"{value} is not a valid number")
 
         unit = self._extract_metric_unit_value(unit=unit)
@@ -158,13 +158,13 @@ class EMFProvider(MetricsProvider):
     def flush(self, metrics):
         print(json.dumps(metrics, separators=(",", ":")))
 
-    def add_dimension(self, name: str, value: str) -> (str, str):
+    def add_dimension(self, name: str, value: str) -> Tuple[str, str]:
         # Cast value to str according to EMF spec
         # Majority of values are expected to be string already, so
         # checking before casting improves performance in most cases
         return name, value if isinstance(value, str) else str(value)
 
-    def add_metadata(self, key: str, value: Any) -> (str, Any):
+    def add_metadata(self, key: str, value: Any) -> Tuple[str, Any]:
         # Cast key to str according to EMF spec
         # Majority of keys are expected to be string already, so
         # checking before casting improves performance in most cases

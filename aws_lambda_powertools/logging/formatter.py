@@ -137,12 +137,12 @@ class LambdaPowertoolsFormatter(BasePowertoolsFormatter):
         self.use_rfc3339_iso8601 = use_rfc3339
 
         if self.utc:
-            self.converter = time.gmtime  # type: ignore
-
-        super(LambdaPowertoolsFormatter, self).__init__(datefmt=self.datefmt)
+            self.converter = time.gmtime
 
         self.keys_combined = {**self._build_default_keys(), **kwargs}
         self.log_format.update(**self.keys_combined)
+
+        super().__init__(datefmt=self.datefmt)
 
     def serialize(self, log: Dict) -> str:
         """Serialize structured log dict to JSON str"""
@@ -176,7 +176,7 @@ class LambdaPowertoolsFormatter(BasePowertoolsFormatter):
             return ts_as_datetime.isoformat(timespec="milliseconds")  # 2022-10-27T17:42:26.841+0200
 
         # converts to local/UTC TZ as struct time
-        record_ts = self.converter(record.created)  # type: ignore
+        record_ts = self.converter(record.created)
 
         if datefmt is None:  # pragma: no cover, it'll always be None in std logging, but mypy
             datefmt = self.datefmt

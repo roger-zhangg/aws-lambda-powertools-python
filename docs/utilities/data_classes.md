@@ -52,6 +52,22 @@ Same example as above, but using the `event_source` decorator
         if 'helloworld' in event.path and event.http_method == 'GET':
             do_something_with(event.body, user)
     ```
+
+Log Data Event for Troubleshooting
+
+=== "app.py"
+
+    ```python hl_lines="4 8"
+    from aws_lambda_powertools.utilities.data_classes import event_source, APIGatewayProxyEvent
+    from aws_lambda_powertools.logging.logger import Logger
+
+    logger = Logger(service="hello_logs", level="DEBUG")
+
+    @event_source(data_class=APIGatewayProxyEvent)
+    def lambda_handler(event: APIGatewayProxyEvent, context):
+        logger.debug(event)
+    ```
+
 **Autocomplete with self-documented properties and methods**
 
 ![Utilities Data Classes](../media/utilities_data_classes.png)
@@ -82,6 +98,7 @@ Same example as above, but using the `event_source` decorator
 | [Rabbit MQ](#rabbit-mq)                                                   | `RabbitMQEvent`                                    |
 | [S3](#s3)                                                                 | `S3Event`                                          |
 | [S3 Object Lambda](#s3-object-lambda)                                     | `S3ObjectLambdaEvent`                              |
+| [S3 EventBridge Notification](#s3-eventbridge-notification)               | `S3EventBridgeNotificationEvent`                   |
 | [SES](#ses)                                                               | `SESEvent`                                         |
 | [SNS](#sns)                                                               | `SNSEvent`                                         |
 | [SQS](#sqs)                                                               | `SQSEvent`                                         |
@@ -1043,6 +1060,19 @@ This example is based on the AWS Blog post [Introducing Amazon S3 Object Lambda 
         return {"status_code": 200}
     ```
 
+### S3 EventBridge Notification
+
+=== "app.py"
+
+    ```python
+    from aws_lambda_powertools.utilities.data_classes import event_source, S3EventBridgeNotificationEvent
+
+    @event_source(data_class=S3EventBridgeNotificationEvent)
+    def lambda_handler(event: S3EventBridgeNotificationEvent, context):
+        bucket_name = event.detail.bucket.name
+        file_key = event.detail.object.key
+    ```
+
 ### SES
 
 === "app.py"
@@ -1089,4 +1119,29 @@ This example is based on the AWS Blog post [Introducing Amazon S3 Object Lambda 
         # Multiple records can be delivered in a single event
         for record in event.records:
             do_something_with(record.body)
+    ```
+
+## Advanced
+
+### Debugging
+
+Alternatively, you can print out the fields to obtain more information. All classes come with a `__str__` method that generates a dictionary string which can be quite useful for debugging.
+
+However, certain events may contain sensitive fields such as `secret_access_key` and `session_token`, which are labeled as `[SENSITIVE]` to prevent any accidental disclosure of confidential information.
+
+!!! warning "If we fail to deserialize a field value (e.g., JSON), they will appear as `[Cannot be deserialized]`"
+
+=== "debugging.py"
+    ```python hl_lines="9"
+    --8<-- "examples/event_sources/src/debugging.py"
+    ```
+
+=== "debugging_event.json"
+    ```json hl_lines="28 29"
+    --8<-- "examples/event_sources/src/debugging_event.json"
+    ```
+=== "debugging_output.json"
+    ```json hl_lines="16 17 18"
+    --8<-- "examples/event_sources/src/debugging_output.json"
+    ```
     ```

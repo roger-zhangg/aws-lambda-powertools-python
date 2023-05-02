@@ -16,14 +16,14 @@ class CodePipelineConfiguration(DictWrapper):
         return self["FunctionName"]
 
     @property
-    def user_parameters(self) -> str:
+    def user_parameters(self) -> Optional[str]:
         """User parameters"""
-        return self["UserParameters"]
+        return self.get("UserParameters", None)
 
     @property
-    def decoded_user_parameters(self) -> Dict[str, Any]:
+    def decoded_user_parameters(self) -> Optional[Dict[str, Any]]:
         """Json Decoded user parameters"""
-        if self._json_data is None:
+        if self._json_data is None and self.user_parameters is not None:
             self._json_data = json.loads(self.user_parameters)
         return self._json_data
 
@@ -80,6 +80,8 @@ class CodePipelineArtifact(DictWrapper):
 
 
 class CodePipelineArtifactCredentials(DictWrapper):
+    _sensitive_properties = ["secret_access_key", "session_token"]
+
     @property
     def access_key_id(self) -> str:
         return self["accessKeyId"]
@@ -95,6 +97,16 @@ class CodePipelineArtifactCredentials(DictWrapper):
     @property
     def expiration_time(self) -> Optional[int]:
         return self.get("expirationTime")
+
+
+class CodePipelineEncryptionKey(DictWrapper):
+    @property
+    def get_id(self) -> str:
+        return self["id"]
+
+    @property
+    def get_type(self) -> str:
+        return self["type"]
 
 
 class CodePipelineData(DictWrapper):
@@ -124,6 +136,12 @@ class CodePipelineData(DictWrapper):
     def continuation_token(self) -> Optional[str]:
         """A continuation token if continuing job"""
         return self.get("continuationToken")
+
+    @property
+    def encryption_key(self) -> Optional[CodePipelineEncryptionKey]:
+        """Represents a CodePipeline encryption key"""
+        key_data = self.get("encryptionKey")
+        return CodePipelineEncryptionKey(key_data) if key_data is not None else None
 
 
 class CodePipelineJobEvent(DictWrapper):
@@ -155,12 +173,12 @@ class CodePipelineJobEvent(DictWrapper):
         return CodePipelineData(self._job["data"])
 
     @property
-    def user_parameters(self) -> str:
+    def user_parameters(self) -> Optional[str]:
         """Action configuration user parameters"""
         return self.data.action_configuration.configuration.user_parameters
 
     @property
-    def decoded_user_parameters(self) -> Dict[str, Any]:
+    def decoded_user_parameters(self) -> Optional[Dict[str, Any]]:
         """Json Decoded action configuration user parameters"""
         return self.data.action_configuration.configuration.decoded_user_parameters
 

@@ -247,6 +247,28 @@ class MetricManager:
         # provider refactor: clear provider as well if they have internal variables
         self.provider.clear_metrics()
 
+    def flush_metrics(self, raise_on_empty_metrics: bool = False) -> None:
+        """Manually flushes the metrics. This is normally not necessary,
+        unless you're running on other runtimes besides Lambda, where the @log_metrics
+        decorator already handles things for you.
+
+        Parameters
+        ----------
+        raise_on_empty_metrics : bool, optional
+            raise exception if no metrics are emitted, by default False
+        """
+        if not raise_on_empty_metrics and not self.metric_set:
+            warnings.warn(
+                "No application metrics to publish. The cold-start metric may be published if enabled. "
+                "If application metrics should never be empty, consider using 'raise_on_empty_metrics'",
+                stacklevel=2,
+            )
+        else:
+            logger.debug("Flushing existing metrics")
+            metrics = self.serialize_metric_set()
+            self.provider.flush(metrics)
+            self.clear_metrics()
+
     def log_metrics(
         self,
         lambda_handler: Union[Callable[[Dict, Any], Any], Optional[Callable[[Dict, Any, Optional[Dict]], Any]]] = None,
@@ -316,9 +338,7 @@ class MetricManager:
                         stacklevel=2,
                     )
                 else:
-                    metrics = self.serialize_metric_set()
-                    self.clear_metrics()
-                    self.provider.flush(metrics)
+                    self.flush_metrics(raise_on_empty_metrics=raise_on_empty_metrics)
 
             return response
 

@@ -162,8 +162,8 @@ You can append additional keys using either mechanism:
 
 #### append_keys method
 
-???+ note
-	`append_keys` replaces `structure_logs(append=True, **kwargs)` method. structure_logs will be removed in v2.
+???+ warning
+	`append_keys` is not thread-safe, please see [RFC](https://github.com/awslabs/aws-lambda-powertools-python/issues/991){target="_blank"}.
 
 You can append your own keys to your existing Logger via `append_keys(**additional_key_values)` method.
 
@@ -443,6 +443,26 @@ If you prefer configuring it separately, or you'd want to bring this JSON Format
 
 ```python hl_lines="2 7-8" title="Pre-configuring Lambda Powertools Formatter"
 --8<-- "examples/logger/src/powertools_formatter_setup.py"
+```
+
+### Observability providers
+
+!!! note "In this context, an observability provider is an [AWS Lambda Partner](https://go.aws/3HtU6CZ){target="_blank"} offering a platform for logging, metrics, traces, etc."
+
+You can send logs to the observability provider of your choice via [Lambda Extensions](https://aws.amazon.com/blogs/compute/using-aws-lambda-extensions-to-send-logs-to-custom-destinations/){target="_blank"}. In most cases, you shouldn't need any custom Logger configuration, and logs will be shipped async without any performance impact.
+
+#### Built-in formatters
+
+In rare circumstances where JSON logs are not parsed correctly by your provider, we offer built-in formatters to make this transition easier.
+
+| Provider | Formatter             | Notes                                                |
+| -------- | --------------------- | ---------------------------------------------------- |
+| Datadog  | `DatadogLogFormatter` | Modifies default timestamp to use RFC3339 by default |
+
+You can use import and use them as any other Logger formatter via `logger_formatter` parameter:
+
+```python hl_lines="2 4" title="Using built-in Logger Formatters"
+--8<-- "examples/logger/src/observability_provider_builtin_formatters.py"
 ```
 
 ### Migrating from other Loggers

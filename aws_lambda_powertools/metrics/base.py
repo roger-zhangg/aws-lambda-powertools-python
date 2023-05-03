@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, Generator, Optional, Union
 from ..shared import constants
 from ..shared.functions import resolve_env_var_choice
 from .exceptions import SchemaValidationError
-from .provider import EMFProvider, MetricsProvider
+from .provider import CloudWatchProvider, MetricsProvider
 from .types import MetricResolution, MetricSummary, MetricUnit
 
 logger = logging.getLogger(__name__)
@@ -22,10 +22,12 @@ is_cold_start = True
 class MetricManager:
     """Base class for metric functionality (namespace, metric, dimension, serialization)
 
-    provider refactor: MetricManager implements general Metrics logic, AWS EMF logic are moved to provider.EMFProvider
+    MetricManager implements general metrics logic,
+    with providers extending from this class to add specific functionality.
+    Developers can easily implement their own metrics provider by implementing the provider interface.
 
-    MetricManager is now refactored to use provider. Default provider is AWS EMF provider
-    Bring/Implement your own metrics provider to support metrics format other than EMF
+    The default provider for the MetricManager is AWS CloudWatch.
+    However, developers can easily bring their own metrics provider to support metrics formats other than EMF.
 
     **Use `aws_lambda_powertools.metrics.metrics.Metrics` or
     `aws_lambda_powertools.metrics.metric.single_metric` to create metrics.**
@@ -63,7 +65,7 @@ class MetricManager:
         self.namespace = resolve_env_var_choice(choice=namespace, env=os.getenv(constants.METRICS_NAMESPACE_ENV))
         self.service = resolve_env_var_choice(choice=service, env=os.getenv(constants.SERVICE_NAME_ENV))
         self.metadata_set = metadata_set if metadata_set is not None else {}
-        self.provider = provider if provider is not None else EMFProvider()
+        self.provider = provider if provider is not None else CloudWatchProvider()
 
     def add_metric(
         self,
@@ -117,6 +119,8 @@ class MetricManager:
             logger.debug(f"Exceeded maximum of {self.provider.MAX_METRICS} metrics - Publishing existing metric set")
 
             metrics = self.serialize_metric_set()
+
+            # don't use self.flush_metric here. It will clear dimension as well
             self.provider.flush(metrics)
 
             # clear metric set only as opposed to metrics and dimensions set
@@ -331,14 +335,7 @@ class MetricManager:
                 if capture_cold_start_metric:
                     self._add_cold_start_metric(context=context)
             finally:
-                if not raise_on_empty_metrics and not self.metric_set:
-                    warnings.warn(
-                        "No application metrics to publish. The cold-start metric may be published if enabled. "
-                        "If application metrics should never be empty, consider using 'raise_on_empty_metrics'",
-                        stacklevel=2,
-                    )
-                else:
-                    self.flush_metrics(raise_on_empty_metrics=raise_on_empty_metrics)
+                self.flush_metrics(raise_on_empty_metrics=raise_on_empty_metrics)
 
             return response
 

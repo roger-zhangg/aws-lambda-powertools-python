@@ -7,19 +7,22 @@ from aws_lambda_powertools.metrics.provider.base import MetricsProvider
 
 
 class Metrics(MetricManager):
-    """Metrics create an EMF object with up to 100 metrics
+    """
+    The default Metric Provider is CloudWatchEMFProvider
+
+    Metrics create an object with up to the limit of metrics accepted by that Metrics provider.
 
     Use Metrics when you need to create multiple metrics that have
-    dimensions in common (e.g. service_name="payment").
+    dimensions in common (for example, service_name="payment").
 
-    Metrics up to 100 metrics in memory and are shared across
-    all its instances. That means it can be safely instantiated outside
-    of a Lambda function, or anywhere else.
+    Metrics are stored in memory up to the limit that the Metrics provider accepts and are shared between
+    all its instances. This means it can be safely instantiated outside
+    from a Lambda function or anywhere else.
 
-    A decorator (log_metrics) is provided so metrics are published at the end of its execution.
-    If more than 100 metrics are added at a given function execution,
+    A decorator (log_metrics) is provided so that the metrics are published at the end of its execution.
+    If the metrics limit of the Metrics provider is reached in a given function execution,
     these metrics are serialized and published before adding a given metric
-    to prevent metric truncation.
+    to avoid metric truncation.
 
     Example
     -------
@@ -49,6 +52,8 @@ class Metrics(MetricManager):
         service name to be used as metric dimension, by default "service_undefined"
     namespace : str, optional
         Namespace for metrics
+    provider: MetricsProvider, optional
+        Metric provider, by default "CloudWatchEMFProvider"
 
     Raises
     ------

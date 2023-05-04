@@ -1,27 +1,29 @@
+from __future__ import annotations
+
 import datetime
 import json
 import logging
 import numbers
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
-from ..exceptions import (
+from aws_lambda_powertools.metrics.exceptions import (
     MetricResolutionError,
     MetricUnitError,
     MetricValueError,
     SchemaValidationError,
 )
-from ..types import (
+from aws_lambda_powertools.metrics.provider import MetricsProvider
+from aws_lambda_powertools.metrics.types import (
     MetricNameUnitResolution,
     MetricResolution,
     MetricSummary,
     MetricUnit,
 )
-from .base import MetricsProvider
 
 logger = logging.getLogger(__name__)
 
 
-class CloudWatchProvider(MetricsProvider):
+class CloudWatchEMFProvider(MetricsProvider):
     """Class for CloudWatch EMF format provider.
 
     Creates metrics asynchronously thanks to CloudWatch Embedded Metric Format (EMF).
@@ -132,7 +134,7 @@ class CloudWatchProvider(MetricsProvider):
     def clear_metrics(self):
         return
 
-    def _extract_metric_resolution_value(self, resolution: Union[int, MetricResolution]) -> int:
+    def _extract_metric_resolution_value(self, resolution: int | MetricResolution) -> int:
         """Return metric value from metric unit whether that's str or MetricResolution enum
 
         Parameters
@@ -162,7 +164,7 @@ class CloudWatchProvider(MetricsProvider):
             # noqa: E501
         )
 
-    def _extract_metric_unit_value(self, unit: Union[str, MetricUnit]) -> str:
+    def _extract_metric_unit_value(self, unit: str | MetricUnit) -> str:
         """Return metric value from metric unit whether that's str or MetricUnit enum
 
         Parameters

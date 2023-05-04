@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Tuple
 
-from ..types import MetricSummary
+from aws_lambda_powertools.metrics.types import MetricSummary
 
 
 class MetricsProvider(ABC):

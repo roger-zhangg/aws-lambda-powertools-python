@@ -54,3 +54,16 @@ class MetricsProvider(ABC):
     @abstractmethod
     def clear_metrics(self):
         pass
+
+
+class MetricsProviderSimple(ABC):
+    """Class for metric provider template
+
+    Use this template to create your own metric provider.
+
+    """
+
+    # General add metric function. Should return combined metrics Dict
+    @abstractmethod
+    def add_metric(self, *args, **kwargs):
+        pass

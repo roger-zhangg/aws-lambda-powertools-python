@@ -213,7 +213,7 @@ def get_secret(
 
 
 def update_secret(
-    name: str, transform: Optional[str] = None, force_fetch: bool = False, max_age: Optional[int] = None, **sdk_options
+    name: str, transform: Optional[str] = None, max_age: Optional[int] = None, **sdk_options
 ) -> Union[str, dict, bytes]:
     """
     Retrieve a parameter value from AWS Secrets Manager
@@ -265,5 +265,5 @@ def update_secret(
         DEFAULT_PROVIDERS["secrets"] = SecretsProvider()
 
     return DEFAULT_PROVIDERS["secrets"].update(
-        name, transform=transform, force_fetch=force_fetch, **sdk_options
+        name, max_age=max_age, transform=transform, **sdk_options
     )

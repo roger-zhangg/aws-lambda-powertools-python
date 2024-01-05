@@ -10,7 +10,7 @@ logger = Logger(serialize_stacktrace=True)
 def access_token(client_id: str, client_secret: str, audience: str) -> str:
     # example function that returns a JWT Access Token
     ...
-    return access_token
+    return "access_token"
 
 
 def lambda_handler(event: dict, context: LambdaContext):

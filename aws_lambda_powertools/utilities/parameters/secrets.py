@@ -118,12 +118,12 @@ class SecretsProvider(BaseProvider):
         """
         raise NotImplementedError()
 
-    def _set(
+    def _set(  # type: ignore
         self,
         name: str,
         value: Union[str, dict, bytes],
         *,  # force keyword arguments
-        client_request_token: str = None,
+        client_request_token: Optional[str] = None,
         version_stages: Optional[list] = None,
         create: bool = False,
         **sdk_options,
@@ -174,8 +174,8 @@ class SecretsProvider(BaseProvider):
             sdk_options["ClientRequestToken"] = client_request_token
 
         try:
-            value = self.client.put_secret_value(**sdk_options)
-            return value["VersionId"]
+            response = self.client.put_secret_value(**sdk_options)
+            return response["VersionId"]
         except ClientError as exc:
             if exc.response["Error"]["Code"] != "ResourceNotFoundException":
                 raise SetParameterError(str(exc)) from exc

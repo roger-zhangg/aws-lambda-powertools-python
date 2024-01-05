@@ -191,7 +191,7 @@ class SSMProvider(BaseProvider):
 
         return self.client.get_parameter(**sdk_options)["Parameter"]["Value"]
 
-    def _set(
+    def _set(  # type: ignore
         self,
         path: str,
         value: str,
@@ -244,8 +244,8 @@ class SSMProvider(BaseProvider):
             sdk_options["KeyId"] = kms_key_id
 
         try:
-            value = self.client.put_parameter(**sdk_options)
-            version = value["Version"]
+            response = self.client.put_parameter(**sdk_options)
+            version = response["Version"]
         except Exception as exc:
             raise SetParameterError(str(exc)) from exc
 

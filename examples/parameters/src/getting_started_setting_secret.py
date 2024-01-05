@@ -6,10 +6,12 @@ from aws_lambda_powertools.utilities.typing import LambdaContext
 
 logger = Logger(serialize_stacktrace=True)
 
+
 def access_token(client_id: str, client_secret: str, audience: str) -> str:
     # example function that returns a JWT Access Token
     ...
     return access_token
+
 
 def lambda_handler(event: dict, context: LambdaContext):
     try:
@@ -19,8 +21,8 @@ def lambda_handler(event: dict, context: LambdaContext):
 
         jwt_token = access_token(client_id=client_id, client_secret=client_secret, audience=audience)
 
-        # set-secret will create a new secret if it doesn't exist and return the version id
-        update_secret_version_id = parameters.set_secret(name="/aws-powertools/jwt_token", value=jwt_token)
+        # if `create=True` is set. set-secret will create a new secret if it doesn't exist and return the version id
+        update_secret_version_id = parameters.set_secret(name="/aws-powertools/jwt_token", value=jwt_token, create=True)
 
         return {"access_token": "updated", "statusCode": 200, "update_secret_version_id": update_secret_version_id}
     except parameters.exceptions.SetParameterError as error:

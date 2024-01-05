@@ -3,13 +3,13 @@ AWS Secrets Manager parameter retrieval and caching utility
 """
 from __future__ import annotations
 
-import os
 import json
+import os
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import boto3
-from botocore.exceptions import ClientError
 from botocore.config import Config
+from botocore.exceptions import ClientError
 
 if TYPE_CHECKING:
     from mypy_boto3_secretsmanager import SecretsManagerClient
@@ -123,11 +123,11 @@ class SecretsProvider(BaseProvider):
         self,
         name: str,
         value: Union[str, dict, bytes],
-        *, # force keyword arguments
-        idempotency_id: Optional[str] = None,
-        version_stages: Optional[list[str]] = None,
-        create: bool = True,
-        **sdk_options
+        *,  # force keyword arguments
+        client_request_token: str = None,
+        version_stages: list[str] = None,
+        create: bool = False,
+        **sdk_options,
     ) -> str:
         """
         Modifies the details of a secret, including metadata and the secret value.
@@ -138,7 +138,7 @@ class SecretsProvider(BaseProvider):
             The ARN or name of the secret to add a new version to.
         value: str or bytes
             Specifies text data that you want to encrypt and store in this new version of the secret.
-        idempotency_token: str, optional
+        client_request_token: str, optional
             This value helps ensure idempotency. Recommended that you generate
             a UUID-type value to ensure uniqueness within the specified secret.
             This value becomes the VersionId of the new version. This field is
@@ -171,26 +171,31 @@ class SecretsProvider(BaseProvider):
 
         if version_stages:
             sdk_options["VersionStages"] = version_stages
-        if idempotency_id:
-            sdk_options["ClientRequestToken"] = idempotency_id
+        if client_request_token:
+            sdk_options["ClientRequestToken"] = client_request_token
 
         try:
             value = self.client.put_secret_value(**sdk_options)
             return value["VersionId"]
-        except ClientError as exc:
-            if exc.response["Error"]["Code"] != "ResourceNotFoundException":
-                raise SetParameterError(str(exc)) from exc
-            elif not create:
-                raise SetParameterError("Parameter does not exist, create before setting or set 'create' to True.")
-            else:
-                sdk_options.pop("SecretId")
-                sdk_options["Name"] = name
-                try:
-                    value = self.client.create_secret(**sdk_options)
-                    return value["VersionId"]
-                except Exception as exc:
-                    raise SetParameterError(str(exc)) from exc
+        except SecretsManagerClient.exceptions.ResourceNotFoundException:
+            # not found, creating and return "VersionId"
+            if create:
+                return self.__create(name=name, **sdk_options)
 
+            # not found, create=False, raise
+            raise SetParameterError("Parameter does not exist, create before setting or set 'create' to True.")
+        except ClientError as exc:
+            # raise to upper level if error is not ResourceNotFoundException
+            raise SetParameterError(str(exc)) from exc
+
+    def __create(self, name: str, **sdk_options):
+        sdk_options.pop("SecretId")
+        sdk_options["Name"] = name
+        try:
+            value = self.client.create_secret(**sdk_options)
+            return value["VersionId"]
+        except Exception as exc:
+            raise SetParameterError(str(exc)) from exc
 
 
 def get_secret(
@@ -264,11 +269,11 @@ def get_secret(
 def set_secret(
     name: str,
     value: Union[str, bytes],
-    *, # force keyword arguments
+    *,  # force keyword arguments
     idempotency_id: Optional[str] = None,
     version_stages: Optional[list[str]] = None,
     create: bool = True,
-    **sdk_options
+    **sdk_options,
 ) -> str:
     """
     Retrieve a parameter value from AWS Secrets Manager
@@ -329,5 +334,10 @@ def set_secret(
         DEFAULT_PROVIDERS["secrets"] = SecretsProvider()
 
     return DEFAULT_PROVIDERS["secrets"]._set(
-        name=name, value=value, idempotency_id=idempotency_id, version_stages=version_stages, create=create, **sdk_options
+        name=name,
+        value=value,
+        idempotency_id=idempotency_id,
+        version_stages=version_stages,
+        create=create,
+        **sdk_options,
     )

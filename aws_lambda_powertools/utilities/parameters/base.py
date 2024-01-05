@@ -153,7 +153,6 @@ class BaseProvider(ABC):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def _set(self, name: str, **sdk_options) -> Union[str, bytes]:
         """
         Sets a parameter value from the underlying parameter store

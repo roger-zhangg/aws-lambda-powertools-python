@@ -195,7 +195,7 @@ class SSMProvider(BaseProvider):
         self,
         path: str,
         value: str,
-        *, # force keyword arguments
+        *,  # force keyword arguments
         parameter_type: SSM_PARAMETER_TYPES = "String",
         overwrite: bool = False,
         tier: SSM_PARAMETER_TIER = "Standard",
@@ -251,7 +251,13 @@ class SSMProvider(BaseProvider):
 
         return version
 
-    def _get_multiple(self, path: str, decrypt: bool = False, recursive: bool = False, **sdk_options) -> Dict[str, str]:
+    def _get_multiple(
+        self,
+        path: str,
+        decrypt: Optional[bool] = None,
+        recursive: bool = False,
+        **sdk_options,
+    ) -> Dict[str, str]:
         """
         Retrieve multiple parameter values from AWS Systems Manager Parameter Store
 
@@ -878,7 +884,7 @@ def get_parameters(
 def set_parameter(
     path: str,
     value: str,
-    *, # force keyword arguments
+    *,  # force keyword arguments
     parameter_type: SSM_PARAMETER_TYPES = "String",
     overwrite: bool = False,
     tier: SSM_PARAMETER_TIER = "Standard",
@@ -946,7 +952,7 @@ def set_parameter(
         tier=tier,
         description=description,
         kms_key_id=kms_key_id,
-        **sdk_options
+        **sdk_options,
     )
 
 

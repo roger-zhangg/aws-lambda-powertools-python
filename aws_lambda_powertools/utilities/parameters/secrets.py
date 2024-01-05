@@ -1,7 +1,6 @@
 """
 AWS Secrets Manager parameter retrieval and caching utility
 """
-from __future__ import annotations
 
 import json
 import os
@@ -125,7 +124,7 @@ class SecretsProvider(BaseProvider):
         value: Union[str, dict, bytes],
         *,  # force keyword arguments
         client_request_token: str = None,
-        version_stages: list[str] = None,
+        version_stages: Optional[list] = None,
         create: bool = False,
         **sdk_options,
     ) -> str:
@@ -177,16 +176,16 @@ class SecretsProvider(BaseProvider):
         try:
             value = self.client.put_secret_value(**sdk_options)
             return value["VersionId"]
-        except SecretsManagerClient.exceptions.ResourceNotFoundException:
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] != "ResourceNotFoundException":
+                raise SetParameterError(str(exc)) from exc
+
             # not found, creating and return "VersionId"
             if create:
                 return self.__create(name=name, **sdk_options)
 
             # not found, create=False, raise
             raise SetParameterError("Parameter does not exist, create before setting or set 'create' to True.")
-        except ClientError as exc:
-            # raise to upper level if error is not ResourceNotFoundException
-            raise SetParameterError(str(exc)) from exc
 
     def __create(self, name: str, **sdk_options):
         sdk_options.pop("SecretId")
@@ -270,8 +269,8 @@ def set_secret(
     name: str,
     value: Union[str, bytes],
     *,  # force keyword arguments
-    idempotency_id: Optional[str] = None,
-    version_stages: Optional[list[str]] = None,
+    client_request_token: Optional[str] = None,
+    version_stages: Optional[list] = None,
     create: bool = True,
     **sdk_options,
 ) -> str:
@@ -336,7 +335,7 @@ def set_secret(
     return DEFAULT_PROVIDERS["secrets"]._set(
         name=name,
         value=value,
-        idempotency_id=idempotency_id,
+        client_request_token=client_request_token,
         version_stages=version_stages,
         create=create,
         **sdk_options,

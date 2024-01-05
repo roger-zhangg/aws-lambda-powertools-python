@@ -4,6 +4,7 @@ import base64
 import json
 import random
 import string
+import uuid
 from datetime import datetime, timedelta
 from io import BytesIO
 from typing import Any, Dict, List, Tuple
@@ -39,6 +40,11 @@ def mock_value():
 @pytest.fixture(scope="function")
 def mock_version():
     return random.randrange(1, 1000)
+
+
+@pytest.fixture(scope="function")
+def mock_version_id():
+    return str(uuid.uuid4())
 
 
 @pytest.fixture(scope="module")
@@ -510,6 +516,7 @@ def test_ssm_provider_get(mock_name, mock_value, mock_version, config):
     finally:
         stubber.deactivate()
 
+
 def test_ssm_provider_set(mock_name, mock_value, mock_version, config):
     """
     Test SSMProvider.set_parameter() with a non-cached value
@@ -519,10 +526,7 @@ def test_ssm_provider_set(mock_name, mock_value, mock_version, config):
 
     # Stub the boto3 client
     stubber = stub.Stubber(provider.client)
-    response = {
-        "Version": mock_version,
-        "Tier": "Standard"
-    }
+    response = {"Version": mock_version, "Tier": "Standard"}
     expected_params = {
         "Name": mock_name,
         "Value": mock_value,
@@ -554,16 +558,13 @@ def test_ssm_provider_set_default_config(monkeypatch, mock_name, mock_value, moc
 
     # Stub the boto3 client
     stubber = stub.Stubber(provider.client)
-    response = {
-        "Version": mock_version,
-        "Tier": "Advanced"
-    }
+    response = {"Version": mock_version, "Tier": "Standard"}
     expected_params = {
         "Name": mock_name,
         "Value": mock_value,
-        "Type": "SecureString",
+        "Type": "String",
         "Overwrite": False,
-        "Tier": "Advanced",
+        "Tier": "Standard",
     }
     stubber.add_response("put_parameter", response, expected_params)
     stubber.activate()
@@ -572,6 +573,78 @@ def test_ssm_provider_set_default_config(monkeypatch, mock_name, mock_value, moc
         version = provider._set(mock_name, mock_value)
 
         assert version == mock_version
+        stubber.assert_no_pending_responses()
+    finally:
+        stubber.deactivate()
+
+
+def test_secret_provider_set_non_exist(mock_name, mock_value, config):
+    """
+    Test SecretsProvider.get() with a non-cached value
+    """
+    # Create a new provider
+    provider = parameters.SecretsProvider(config=config)
+
+    # Stub the boto3 client
+    stubber = stub.Stubber(provider.client)
+    expected_params = {
+        "SecretId": mock_name,
+        "SecretString": mock_value,
+    }
+    # stubber raise on non-exist key
+    stubber.add_client_error(
+        "put_secret_value",
+        service_error_code="ResourceNotFoundException",
+        expected_params=expected_params,
+    )
+    stubber.activate()
+
+    try:
+        # Then should raise SetParameterError
+        with pytest.raises(parameters.exceptions.SetParameterError):
+            # when setting a non-exist secret with create=False
+            provider._set(mock_name, mock_value, create=False)
+
+        stubber.assert_no_pending_responses()
+    finally:
+        stubber.deactivate()
+
+
+def test_secret_provider_set_exist(mock_name, mock_value, config, mock_version_id):
+    """
+    Test SecretsProvider.get() with a non-cached value
+    """
+    # Create a new provider
+    provider = parameters.SecretsProvider(config=config)
+
+    # Stub the boto3 client
+    stubber = stub.Stubber(provider.client)
+    response = {"VersionId": mock_version_id}
+    expected_params_set = {
+        "SecretId": mock_name,
+        "SecretString": mock_value,
+        "ClientRequestToken": mock_version_id,
+    }
+    expected_params_create = {
+        "Name": mock_name,
+        "SecretString": mock_value,
+        "ClientRequestToken": mock_version_id,
+    }
+    # stubber raise on non-exist key
+    stubber.add_client_error(
+        "put_secret_value",
+        service_error_code="ResourceNotFoundException",
+        expected_params=expected_params_set,
+    )
+    stubber.add_response("create_secret", service_response=response, expected_params=expected_params_create)
+
+    stubber.activate()
+
+    try:
+        # when setting a non-exist secret with create=True
+        value = provider._set(mock_name, mock_value, create=True, client_request_token=mock_version_id)
+        assert value == mock_version_id
+        # Then should raise SetParameterError
         stubber.assert_no_pending_responses()
     finally:
         stubber.deactivate()

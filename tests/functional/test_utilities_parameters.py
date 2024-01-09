@@ -521,7 +521,7 @@ def test_ssm_provider_set(mock_name, mock_value, mock_version, config):
     """
     Test SSMProvider.set_parameter() with a non-cached value
     """
-    # Create a new provider
+    # Create a new provider with config
     provider = parameters.SSMProvider(config=config)
 
     # Stub the boto3 client
@@ -534,12 +534,15 @@ def test_ssm_provider_set(mock_name, mock_value, mock_version, config):
         "Overwrite": False,
         "Tier": "Standard",
     }
+    # Stubber assert params to be expected_params
     stubber.add_response("put_parameter", response, expected_params)
     stubber.activate()
 
     try:
+        # when setting a key,value pair
         version = provider._set(mock_name, mock_value)
 
+        # then reuslt version and mock_version is identical
         assert version == mock_version
         stubber.assert_no_pending_responses()
     finally:
@@ -553,7 +556,7 @@ def test_ssm_provider_set_default_config(monkeypatch, mock_name, mock_value, moc
 
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-2")
 
-    # Create a new provider
+    # Create a new provider without config
     provider = parameters.SSMProvider()
 
     # Stub the boto3 client
@@ -566,12 +569,15 @@ def test_ssm_provider_set_default_config(monkeypatch, mock_name, mock_value, moc
         "Overwrite": False,
         "Tier": "Standard",
     }
+    # Stubber assert params to be expected_params
     stubber.add_response("put_parameter", response, expected_params)
     stubber.activate()
 
     try:
+        # when setting a key,value pair
         version = provider._set(mock_name, mock_value)
 
+        # then reuslt version and mock_version is identical
         assert version == mock_version
         stubber.assert_no_pending_responses()
     finally:
@@ -644,7 +650,7 @@ def test_secret_provider_set_exist(mock_name, mock_value, config, mock_version_i
         # when setting a non-exist secret with create=True
         value = provider._set(mock_name, mock_value, create=True, client_request_token=mock_version_id)
         assert value == mock_version_id
-        # Then should raise SetParameterError
+        # Then key is created and result value and mock version id should be identical
         stubber.assert_no_pending_responses()
     finally:
         stubber.deactivate()

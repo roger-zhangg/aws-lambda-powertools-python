@@ -135,8 +135,8 @@ class SecretsProvider(BaseProvider):
         ----------
         name: str
             The ARN or name of the secret to add a new version to.
-        value: str or bytes
-            Specifies text data that you want to encrypt and store in this new version of the secret.
+        value: str or dict or bytes
+            Specifies data that you want to encrypt and store in this new version of the secret.
         client_request_token: str, optional
             This value helps ensure idempotency. Recommended that you generate
             a UUID-type value to ensure uniqueness within the specified secret.
@@ -283,7 +283,7 @@ def set_secret(
         Name of the parameter
     value: str or bytes
         Secret value to set
-    idempotency_token: str, optional
+    client_request_token: str, optional
         This value helps ensure idempotency. Recommended that you generate
         a UUID-type value to ensure uniqueness within the specified secret.
         This value becomes the VersionId of the new version. This field is
@@ -317,14 +317,14 @@ def set_secret(
         >>>
         >>> parameters.set_secret(name="llamas-are-awesome", value="supers3cr3tllam@passw0rd")
 
-    **Sets a secret and includes an idempotency_id**
+    **Sets a secret and includes an client_request_token**
 
         >>> from aws_lambda_powertools.utilities import parameters
         >>>
         >>> parameters.set_secret(
                 name="my-secret",
                 value='{"password": "supers3cr3tllam@passw0rd"}',
-                idempotency_id="61f2af5f-5f75-44b1-a29f-0cc37af55b11"
+                client_request_token="61f2af5f-5f75-44b1-a29f-0cc37af55b11" #nosec
             )
     """
 

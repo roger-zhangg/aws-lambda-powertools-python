@@ -324,7 +324,7 @@ def set_secret(
         >>> parameters.set_secret(
                 name="my-secret",
                 value='{"password": "supers3cr3tllam@passw0rd"}',
-                client_request_token="61f2af5f-5f75-44b1-a29f-0cc37af55b11" #nosec
+                client_request_token="61f2af5f-5f75-44b1-a29f-0cc37af55b11"
             )
     """
 
